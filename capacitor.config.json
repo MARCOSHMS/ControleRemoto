@@ -1,0 +1,9 @@
+{
+  "appId": "com.wonit.controleremotopc",
+  "appName": "Controle Remoto PC",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}

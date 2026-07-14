@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Controle Remoto PC</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0f1117" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<style>
+  :root{ --bg:#0f1117; --card:#181b25; --accent:#5b8cff; --accent2:#2e3550; --text:#eef0f6; --muted:#8890a6; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overscroll-behavior:none; overflow-x:hidden; }
+  #login{ height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:24px; }
+  #login h1{ font-size:20px; margin:0 0 8px; }
+  #login input{ width:200px; text-align:center; font-size:28px; letter-spacing:8px; padding:12px; border-radius:12px; border:1px solid var(--accent2); background:var(--card); color:var(--text); }
+  #login button, .btn{ background:var(--accent); color:#fff; border:none; border-radius:12px; padding:14px 20px; font-size:16px; font-weight:600; }
+  #deviceList{ width:100%; max-width:280px; display:flex; flex-direction:column; gap:8px; }
+  .device-item{ display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--accent2); border-radius:12px; padding:12px 14px; text-align:left; color:var(--text); font-size:15px; }
+  .device-item:active{ background:var(--accent2); }
+  .device-item .dot2{ width:8px; height:8px; border-radius:50%; background:#3ddc84; flex-shrink:0; }
+  #status{ color:var(--muted); font-size:14px; min-height:20px; }
+
+  #app{ display:none; height:100%; grid-template-rows:auto auto 1fr auto; }
+  header{ grid-row:1; }
+  #nowPlaying{ grid-row:2; }
+  #touchpad{ grid-row:3; }
+  footer{ grid-row:4; }
+  header{ display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--card); gap:8px; }
+  header .dot{ width:8px; height:8px; border-radius:50%; background:#3ddc84; display:inline-block; margin-right:6px; }
+  header .left{ flex:1; min-width:0; }
+  header .actions{ display:flex; gap:8px; }
+  header .icon-btn{ padding:8px 12px; font-size:16px; background:var(--card); color:var(--text); border:1px solid var(--accent2); border-radius:10px; }
+
+  #settingsOverlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; align-items:flex-end; justify-content:center; }
+  #settingsOverlay.visible{ display:flex; }
+  #settingsPanel{ width:100%; max-width:480px; background:var(--card); border-radius:18px 18px 0 0; padding:20px; padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
+  #settingsPanel h2{ margin:0 0 18px; font-size:17px; }
+  .setting-row{ margin-bottom:20px; }
+  .setting-row label{ display:flex; justify-content:space-between; font-size:14px; color:var(--muted); margin-bottom:8px; }
+  .setting-row input[type=range]{ width:100%; accent-color:var(--accent); }
+  #settingsClose{ width:100%; margin-top:6px; }
+
+  #nowPlaying{ display:none; margin:10px 12px 0; padding:10px 12px; background:var(--card); border-radius:14px; border:1px solid var(--accent2); overflow:hidden; max-width:100%; }
+  #nowPlaying.visible{ display:flex; align-items:center; gap:10px; }
+  #nowPlaying .info{ flex:1; min-width:0; overflow:hidden; }
+  #nowPlaying .title{ font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #nowPlaying .subtitle{ font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #nowPlaying .np-btn{ background:var(--accent2); border:none; color:#fff; width:36px; height:36px; border-radius:50%; font-size:16px; flex-shrink:0; }
+
+  #touchpad{ margin:12px; border-radius:18px; background:var(--card); flex:1; position:relative; touch-action:none; }
+  #touchpad::after{ content:"toque = clique  •  arraste = mover  •  2 dedos = rolar"; position:absolute; bottom:10px; left:0; right:0; text-align:center; color:var(--muted); font-size:12px; }
+
+  .row{ display:flex; gap:8px; padding:8px 12px; }
+  .row .btn{ flex:1; padding:14px 6px; font-size:15px; text-align:center; background:var(--card); color:var(--text); border:1px solid var(--accent2); }
+  .row .btn:active{ background:var(--accent2); }
+  .row .btn.primary{ background:var(--accent); border:none; color:#fff; }
+  .row .btn.muted{ background:#e5484d; border-color:#e5484d; color:#fff; }
+  .row .btn.danger{ background:#3a1216; border-color:#e5484d; color:#ff8a8a; }
+  .row .btn.danger:active{ background:#e5484d; color:#fff; }
+
+  #shutdownToast{ display:none; position:fixed; left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom)); background:#3a1216; border:1px solid #e5484d; color:#fff; border-radius:14px; padding:12px 14px; align-items:center; gap:10px; z-index:60; }
+  #shutdownToast.visible{ display:flex; }
+  #shutdownToast span{ flex:1; font-size:14px; }
+  #shutdownToast button{ background:#e5484d; color:#fff; border:none; border-radius:8px; padding:8px 14px; font-weight:600; }
+
+  #kbBar{ display:none; padding:6px 10px; background:var(--card); gap:8px; }
+  #kbBar.visible{ display:flex; }
+  #keyboardInput{ flex:1; font-size:15px; padding:8px 10px; border-radius:8px; border:1px solid var(--accent2); background:#10131c; color:var(--text); }
+  #kbClose{ padding:0 16px; font-size:14px; }
+  footer{ padding-bottom:calc(8px + env(safe-area-inset-bottom)); }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h1>🖥️ Controle Remoto PC</h1>
+  <div id="status">Procurando computadores na rede…</div>
+
+  <div id="deviceList"></div>
+
+  <button id="manualToggle" style="background:none;border:none;color:var(--muted);text-decoration:underline;font-size:13px;">Não achou? Digitar endereço manualmente</button>
+
+  <div id="manualBox" style="display:none;">
+    <input id="ip" placeholder="Ex: 192.168.0.15:8080" autocapitalize="off" autocorrect="off" spellcheck="false" style="width:220px; text-align:center; font-size:16px; letter-spacing:normal; padding:10px; border-radius:10px; border:1px solid var(--accent2); background:var(--card); color:var(--text); margin-top:10px;" />
+  </div>
+
+  <input id="pin" inputmode="numeric" maxlength="4" placeholder="PIN (0000)" style="margin-top:10px;" />
+  <button id="connectBtn">Conectar</button>
+</div>
+
+<div id="app">
+  <header>
+    <div class="left"><span class="dot"></span>Conectado</div>
+    <div class="actions">
+      <button class="icon-btn" id="settingsBtn">⚙️</button>
+      <button class="icon-btn" id="kbToggle">⌨️ Teclado</button>
+    </div>
+  </header>
+
+  <div id="nowPlaying">
+    <div class="info">
+      <div class="title" id="npTitle">—</div>
+      <div class="subtitle" id="npSubtitle">—</div>
+    </div>
+    <button class="np-btn" id="npPlayPause">⏯</button>
+  </div>
+
+  <div id="touchpad"></div>
+  <audio id="volSensor" loop playsinline style="display:none"></audio>
+
+  <div id="kbBar">
+    <input id="keyboardInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Digite aqui..." />
+    <button class="btn" id="kbClose">OK</button>
+  </div>
+
+  <footer>
+    <div class="row">
+      <div class="btn" id="btnLeft">Clique Esq.</div>
+      <div class="btn" id="btnRight">Clique Dir.</div>
+    </div>
+    <div class="row">
+      <div class="btn" data-media="prev">⏮</div>
+      <div class="btn" id="mediaPlayPause" data-media="play-pause">⏯</div>
+      <div class="btn" data-media="next">⏭</div>
+    </div>
+    <div class="row">
+      <div class="btn" data-vol="down">🔉 −</div>
+      <div class="btn" data-vol="mute">🔇</div>
+      <div class="btn" data-vol="up">🔊 +</div>
+      <div class="btn" id="micToggle">🎤</div>
+    </div>
+    <div class="row">
+      <div class="btn" data-key="esc">Esc</div>
+      <div class="btn" data-key="tab">Tab</div>
+      <div class="btn" data-key="win">Win</div>
+      <div class="btn" data-key="alt+tab">Alt+Tab</div>
+    </div>
+    <div class="row">
+      <div class="btn" data-key="left">←</div>
+      <div class="btn" data-key="up">↑</div>
+      <div class="btn" data-key="down">↓</div>
+      <div class="btn" data-key="right">→</div>
+    </div>
+    <div class="row">
+      <div class="btn" data-key="backspace">⌫</div>
+      <div class="btn primary" data-key="enter">⏎</div>
+      <div class="btn" data-key="alt+f4">✕</div>
+      <div class="btn danger" id="shutdownBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle">
+          <path d="M12 2v10"></path>
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+        </svg>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<div id="shutdownToast">
+  <span>Desligando o computador em alguns segundos…</span>
+  <button id="shutdownCancel">Cancelar</button>
+</div>
+
+<div id="settingsOverlay">
+  <div id="settingsPanel">
+    <h2>⚙️ Configurações</h2>
+    <div class="setting-row">
+      <label>Sensibilidade do mouse <span id="sensValue">100%</span></label>
+      <input type="range" id="sensSlider" min="30" max="600" step="10" value="180" />
+    </div>
+    <div class="setting-row">
+      <label>Sensibilidade do scroll <span id="scrollValue">100%</span></label>
+      <input type="range" id="scrollSlider" min="30" max="300" step="10" value="100" />
+    </div>
+    <button class="btn primary" id="settingsClose">Fechar</button>
+  </div>
+</div>
+
+<script src="socket.io.min.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+let socket = null;
+
+function connect(ip, pin) {
+  $("#status").textContent = "Conectando...";
+  const url = ip.includes(":") ? "http://" + ip : "http://" + ip + ":8080";
+  socket = io(url, { auth: { pin }, transports: ["websocket", "polling"] });
+  setupNowPlaying();
+
+  socket.on("connect", () => {
+    localStorage.setItem("rc_pin", pin);
+    localStorage.setItem("rc_ip", ip);
+    $("#login").style.display = "none";
+    $("#app").style.display = "grid";
+    setupVolumeButtons();
+    try {
+      if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+        window.Capacitor.registerPlugin("PcDiscovery").stopDiscovery();
+      }
+    } catch (e) {}
+  });
+
+  socket.on("connect_error", (err) => {
+    $("#status").textContent = "Falha: " + (err.message || "verifique o endereço e o PIN");
+  });
+}
+
+$("#connectBtn").addEventListener("click", () => {
+  const ip = $("#ip").value.trim();
+  const pin = $("#pin").value.trim();
+  if (!ip || pin.length !== 4) return;
+  // Precisa ser chamado *dentro* do clique (gesto do usuário), senão o
+  // navegador bloqueia o áudio automático mais tarde.
+  primeVolumeAudio();
+  connect(ip, pin);
+});
+
+$("#manualToggle").addEventListener("click", () => {
+  const box = $("#manualBox");
+  box.style.display = box.style.display === "none" ? "block" : "none";
+});
+
+// ---------- Descoberta automática de PCs na rede ----------
+// Só funciona dentro do app instalado (usa um plugin nativo do Android
+// que escuta a rede Wi-Fi); no navegador comum isso fica desativado e
+// cai direto no campo manual.
+let selectedIp = null;
+const deviceList = $("#deviceList");
+
+function addDeviceToList(device) {
+  const btn = document.createElement("button");
+  btn.className = "device-item";
+  btn.innerHTML = `<span class="dot2"></span><span>${device.name || "Computador"} <br><small style="color:var(--muted)">${device.ip}:${device.port}</small></span>`;
+  btn.addEventListener("click", () => {
+    selectedIp = device.ip + ":" + device.port;
+    $("#ip").value = selectedIp;
+    document.querySelectorAll(".device-item").forEach((el) => (el.style.borderColor = "var(--accent2)"));
+    btn.style.borderColor = "var(--accent)";
+    $("#pin").focus();
+  });
+  deviceList.appendChild(btn);
+}
+
+function startAutoDiscovery() {
+  if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
+    $("#status").textContent = "Digite o endereço do PC e o PIN";
+    $("#manualBox").style.display = "block";
+    return;
+  }
+  try {
+    const PcDiscovery = window.Capacitor.registerPlugin("PcDiscovery");
+    PcDiscovery.addListener("deviceFound", (device) => {
+      $("#status").textContent = "Computadores encontrados — toque em um pra conectar:";
+      addDeviceToList(device);
+    });
+    PcDiscovery.startDiscovery();
+    setTimeout(() => {
+      if (!deviceList.children.length) {
+        $("#status").textContent = "Nenhum computador encontrado ainda…";
+      }
+    }, 6000);
+  } catch (e) {
+    $("#status").textContent = "Digite o endereço do PC e o PIN";
+    $("#manualBox").style.display = "block";
+  }
+}
+startAutoDiscovery();
+
+// Auto-conectar se já tiver endereço/PIN salvos
+const savedPin = localStorage.getItem("rc_pin");
+const savedIp = localStorage.getItem("rc_ip");
+if (savedPin && savedIp) {
+  $("#pin").value = savedPin;
+  $("#ip").value = savedIp;
+  connect(savedIp, savedPin);
+  // Conexão automática não conta como "gesto do usuário" pro navegador,
+  // então libera o áudio silencioso assim que a pessoa tocar em qualquer
+  // lugar da tela pela primeira vez.
+  document.addEventListener("touchstart", primeVolumeAudio, { once: true });
+}
+
+// ---------- Botões físicos de volume do celular ----------
+// Truque: toca um áudio silencioso em loop. Quando o usuário aperta o
+// botão físico de volume do celular, o navegador ajusta o volume desse
+// áudio — a gente "escuta" essa mudança e replica no PC, sempre
+// recentralizando o valor pra ter espaço nos dois sentidos.
+const SILENT_AUDIO =
+  "data:audio/wav;base64,UklGRoQJAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YWAJAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==";
+
+function primeVolumeAudio() {
+  const audio = document.getElementById("volSensor");
+  if (!audio.src) audio.src = SILENT_AUDIO;
+  audio.volume = 0.5;
+  audio.play().catch(() => {});
+}
+
+let volLastValue = 0.5;
+function setupVolumeButtons() {
+  const audio = document.getElementById("volSensor");
+  if (!audio.src) audio.src = SILENT_AUDIO;
+  audio.volume = 0.5;
+  volLastValue = 0.5;
+
+  audio.play().catch(() => {
+    // Alguns navegadores exigem toque na tela antes de tocar áudio;
+    // tenta de novo no primeiro toque no touchpad.
+    document.addEventListener("touchstart", () => audio.play().catch(() => {}), { once: true });
+  });
+
+  audio.addEventListener("volumechange", () => {
+    if (audio.muted) return;
+    const now = audio.volume;
+    if (now > volLastValue + 0.01) {
+      socket.emit("volume", { action: "up" });
+    } else if (now < volLastValue - 0.01) {
+      socket.emit("volume", { action: "down" });
+    } else {
+      return; // mudança irrelevante (ex: nossa própria recentralização)
+    }
+    volLastValue = now;
+    // Recentraliza o volume do sensor, sempre deixando espaço pra
+    // detectar tanto o próximo aumento quanto a próxima diminuição.
+    setTimeout(() => {
+      audio.volume = 0.5;
+      volLastValue = 0.5;
+    }, 250);
+  });
+}
+
+// ---------- Configurações (sensibilidade) ----------
+let mouseSensitivity = parseFloat(localStorage.getItem("rc_sens") || "3.2");
+let scrollSensitivity = parseFloat(localStorage.getItem("rc_scroll_sens") || "1.5");
+
+const settingsOverlay = $("#settingsOverlay");
+const sensSlider = $("#sensSlider");
+const sensValue = $("#sensValue");
+const scrollSlider = $("#scrollSlider");
+const scrollValue = $("#scrollValue");
+
+// Os sliders vão de 30% a 300%; 100% = valor padrão original (1.8 e 1.5)
+sensSlider.value = Math.round((mouseSensitivity / 1.8) * 100);
+sensValue.textContent = sensSlider.value + "%";
+scrollSlider.value = Math.round((scrollSensitivity / 1.5) * 100);
+scrollValue.textContent = scrollSlider.value + "%";
+
+$("#settingsBtn").addEventListener("click", () => settingsOverlay.classList.add("visible"));
+$("#settingsClose").addEventListener("click", () => settingsOverlay.classList.remove("visible"));
+settingsOverlay.addEventListener("click", (e) => {
+  if (e.target === settingsOverlay) settingsOverlay.classList.remove("visible");
+});
+
+sensSlider.addEventListener("input", () => {
+  const pct = Number(sensSlider.value);
+  sensValue.textContent = pct + "%";
+  mouseSensitivity = 1.8 * (pct / 100);
+  localStorage.setItem("rc_sens", mouseSensitivity);
+});
+
+scrollSlider.addEventListener("input", () => {
+  const pct = Number(scrollSlider.value);
+  scrollValue.textContent = pct + "%";
+  scrollSensitivity = 1.5 * (pct / 100);
+  localStorage.setItem("rc_scroll_sens", scrollSensitivity);
+});
+
+// ---------- Touchpad ----------
+const pad = $("#touchpad");
+let lastX = 0, lastY = 0, touching = false, moved = false, twoFinger = false, lastTapTime = 0;
+
+pad.addEventListener("touchstart", (e) => {
+  touching = true; moved = false;
+  twoFinger = e.touches.length >= 2;
+  const t = e.touches[0];
+  lastX = t.clientX; lastY = t.clientY;
+});
+
+pad.addEventListener("touchmove", (e) => {
+  e.preventDefault();
+  if (!touching) return;
+  const t = e.touches[0];
+  const dx = t.clientX - lastX;
+  const dy = t.clientY - lastY;
+  lastX = t.clientX; lastY = t.clientY;
+  if (Math.abs(dx) > 1 || Math.abs(dy) > 1) moved = true;
+
+  if (twoFinger) {
+    socket.emit("mouse-scroll", { dy: dy * scrollSensitivity });
+  } else {
+    socket.emit("mouse-move", { dx: dx * mouseSensitivity, dy: dy * mouseSensitivity });
+  }
+}, { passive: false });
+
+pad.addEventListener("touchend", (e) => {
+  if (!moved && !twoFinger) {
+    const now = Date.now();
+    const double = now - lastTapTime < 300;
+    lastTapTime = now;
+    socket.emit("mouse-click", { button: "left", double });
+  }
+  touching = false;
+});
+
+// ---------- Tocando agora ----------
+const npBox = $("#nowPlaying");
+const npTitle = $("#npTitle");
+const npSubtitle = $("#npSubtitle");
+const npPlayPauseBtn = $("#npPlayPause");
+const rowPlayPauseBtn = $("#mediaPlayPause");
+
+// O Windows identifica o app com um código técnico tipo
+// "5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App" — aqui a gente extrai só
+// a parte legível ("WhatsAppDesktop").
+function prettifyApp(id) {
+  if (!id) return "";
+  let s = id;
+  const dot = s.indexOf(".");
+  if (dot > -1) s = s.slice(dot + 1);
+  s = s.split("_")[0];
+  s = s.split("!")[0];
+  return s || id;
+}
+
+$("#npPlayPause").addEventListener("click", () => socket.emit("media", { action: "play-pause" }));
+
+function setupNowPlaying() {
+  socket.on("now-playing", (info) => {
+    if (!info) { npBox.classList.remove("visible"); return; }
+    npTitle.textContent = info.title || "—";
+    npSubtitle.textContent = [info.artist, prettifyApp(info.app)].filter(Boolean).join(" • ");
+    npBox.classList.add("visible");
+
+    // Ícone reflete o estado real (tocando/pausado), em vez de ficar
+    // sempre com o mesmo símbolo neutro.
+    const playing = info.status === "Playing";
+    const icon = playing ? "⏸" : "▶";
+    npPlayPauseBtn.textContent = icon;
+    rowPlayPauseBtn.textContent = icon;
+  });
+
+  socket.on("mic-status", ({ muted }) => {
+    if (muted === null || muted === undefined) return; // não deu pra detectar
+    micBtn.classList.toggle("muted", muted);
+    micBtn.textContent = muted ? "🔇" : "🎤";
+  });
+}
+
+// ---------- Botões ----------
+$("#btnLeft").addEventListener("click", () => socket.emit("mouse-click", { button: "left" }));
+$("#btnRight").addEventListener("click", () => socket.emit("mouse-click", { button: "right" }));
+
+document.querySelectorAll("[data-media]").forEach(el =>
+  el.addEventListener("click", () => socket.emit("media", { action: el.dataset.media })));
+
+document.querySelectorAll("[data-vol]").forEach(el =>
+  el.addEventListener("click", () => socket.emit("volume", { action: el.dataset.vol })));
+
+document.querySelectorAll("[data-key]").forEach(el =>
+  el.addEventListener("click", () => socket.emit("key-press", { key: el.dataset.key })));
+
+// ---------- Desligar o PC (com confirmação) ----------
+const shutdownToast = $("#shutdownToast");
+$("#shutdownBtn").addEventListener("click", () => {
+  const ok = confirm("Tem certeza que deseja desligar o computador?");
+  if (!ok) return;
+  socket.emit("shutdown");
+  shutdownToast.classList.add("visible");
+  setTimeout(() => shutdownToast.classList.remove("visible"), 10000);
+});
+$("#shutdownCancel").addEventListener("click", () => {
+  socket.emit("shutdown-cancel");
+  shutdownToast.classList.remove("visible");
+});
+
+const micBtn = $("#micToggle");
+micBtn.addEventListener("click", () => socket.emit("mic-toggle"));
+
+// ---------- Teclado (envia texto digitado no celular pro PC) ----------
+const kbInput = $("#keyboardInput");
+const kbBar = $("#kbBar");
+
+$("#kbToggle").addEventListener("click", () => {
+  kbBar.classList.add("visible");
+  kbInput.value = "";
+  kbInput.focus();
+});
+$("#kbClose").addEventListener("click", () => {
+  kbInput.blur();
+  kbBar.classList.remove("visible");
+});
+
+// Usamos inputType/data (mais confiável que comparar tamanho do texto,
+// que quebra com corretor automático e teclados preditivos do celular).
+kbInput.addEventListener("input", (e) => {
+  const type = e.inputType || "";
+  if (type.startsWith("delete")) {
+    socket.emit("key-press", { key: "backspace" });
+  } else if (e.data) {
+    socket.emit("key-type", { text: e.data });
+  } else if (kbInput.value) {
+    // Fallback: autocorreção/sugestão trocou o texto inteiro de uma vez
+    socket.emit("key-type", { text: kbInput.value });
+  }
+  // Limpa o campo a cada tecla, assim sempre partimos de "vazio" e cada
+  // evento representa exatamente o que foi digitado/apagado agora.
+  requestAnimationFrame(() => { kbInput.value = ""; });
+});
+
+kbInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    socket.emit("key-press", { key: "enter" }); e.preventDefault();
+  } else if (e.key === "Backspace") {
+    // Captura direto aqui (mais confiável que o evento "input", que não
+    // dispara quando o campo já está vazio, o que acontecia sempre já
+    // que limpamos o campo a cada tecla digitada).
+    socket.emit("key-press", { key: "backspace" }); e.preventDefault();
+  }
+});
+</script>
+</body>
+</html>
