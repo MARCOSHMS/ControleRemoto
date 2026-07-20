@@ -255,9 +255,25 @@ function startAutoDiscovery() {
       addDeviceToList(device);
     });
     PcDiscovery.startDiscovery();
-    setTimeout(() => {
-      if (!deviceList.children.length) {
-        $("#status").textContent = "Nenhum computador encontrado ainda…";
+    setTimeout(async () => {
+      if (deviceList.children.length) return; // já achou por broadcast, não precisa do plano B
+
+      // Plano B: em redes corporativas/públicas com "isolamento de
+      // cliente" ativado, o broadcast não chega entre os aparelhos.
+      // Nesse caso, escaneia a sub-rede procurando o servidor
+      // diretamente (mais lento, mas funciona onde o broadcast não
+      // funciona).
+      try {
+        const { ip: myIp } = await PcDiscovery.getLocalIp();
+        if (myIp) {
+          await scanSubnetForServer(myIp);
+        } else {
+          $("#status").textContent = "Nenhum computador encontrado. Digite o endereço manualmente.";
+          $("#manualBox").style.display = "block";
+        }
+      } catch (e) {
+        $("#status").textContent = "Nenhum computador encontrado. Digite o endereço manualmente.";
+        $("#manualBox").style.display = "block";
       }
     }, 6000);
   } catch (e) {
@@ -266,6 +282,57 @@ function startAutoDiscovery() {
   }
 }
 startAutoDiscovery();
+
+// Plano B pra quando o broadcast não funciona (ex: redes corporativas
+// com isolamento de cliente entre Wi-Fi). Varre os IPs prováveis da
+// mesma sub-rede do celular, testando se algum responde como o nosso
+// servidor (usa a rota /api/ping, que se identifica).
+async function scanSubnetForServer(myIp) {
+  $("#status").textContent = "Broadcast não chegou — procurando na rede (alguns segundos)…";
+  const parts = myIp.split(".");
+  if (parts.length !== 4) return;
+  const base = parts.slice(0, 3).join(".");
+  const myLastOctet = Number(parts[3]);
+
+  const candidates = [];
+  for (let i = 1; i <= 254; i++) {
+    if (i !== myLastOctet) candidates.push(`${base}.${i}`);
+  }
+
+  let index = 0;
+  let foundAny = false;
+  const concurrency = 40;
+
+  async function worker() {
+    while (index < candidates.length) {
+      const ip = candidates[index++];
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 700);
+        const res = await fetch(`http://${ip}:8080/api/ping`, { signal: controller.signal });
+        clearTimeout(timer);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.app === "controle-remoto-pc") {
+            foundAny = true;
+            addDeviceToList({ name: data.name || "Computador", ip, port: data.port || 8080 });
+          }
+        }
+      } catch (e) {
+        // não respondeu nesse IP, segue pro próximo
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, worker));
+
+  if (!foundAny) {
+    $("#status").textContent = "Nenhum computador encontrado. Digite o endereço manualmente.";
+    $("#manualBox").style.display = "block";
+  } else {
+    $("#status").textContent = "Computadores encontrados — toque em um pra conectar:";
+  }
+}
 
 // Auto-conectar se já tiver endereço/PIN salvos
 const savedPin = localStorage.getItem("rc_pin");

@@ -1,6 +1,10 @@
 package com.wonit.controleremotopc;
 
 import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
+import android.net.Network;
 import android.net.wifi.WifiManager;
 
 import com.getcapacitor.JSObject;
@@ -13,6 +17,8 @@ import org.json.JSONObject;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.HashMap;
 import java.util.Map;
@@ -123,5 +129,58 @@ public class PcDiscoveryPlugin extends Plugin {
             // ignora
         }
         call.resolve();
+    }
+
+    // Descobre o próprio IP do celular na rede Wi-Fi — usado como plano B
+    // (escaneamento de sub-rede) quando o broadcast não chega, o que
+    // acontece em redes corporativas/públicas com "isolamento de
+    // cliente" ativado no roteador.
+    @PluginMethod
+    public void getLocalIp(PluginCall call) {
+        String ip = null;
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getContext()
+                    .getApplicationContext()
+                    .getSystemService(Context.CONNECTIVITY_SERVICE);
+            Network network = cm.getActiveNetwork();
+            LinkProperties linkProperties = cm.getLinkProperties(network);
+            if (linkProperties != null) {
+                for (LinkAddress la : linkProperties.getLinkAddresses()) {
+                    InetAddress addr = la.getAddress();
+                    if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
+                        ip = addr.getHostAddress();
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // segue pro fallback abaixo
+        }
+
+        if (ip == null) {
+            try {
+                WifiManager wifi = (WifiManager) getContext()
+                        .getApplicationContext()
+                        .getSystemService(Context.WIFI_SERVICE);
+                if (wifi != null) {
+                    int ipInt = wifi.getConnectionInfo().getIpAddress();
+                    if (ipInt != 0) {
+                        ip = String.format(
+                                "%d.%d.%d.%d",
+                                (ipInt & 0xff),
+                                (ipInt >> 8 & 0xff),
+                                (ipInt >> 16 & 0xff),
+                                (ipInt >> 24 & 0xff)
+                        );
+                    }
+                }
+            } catch (Exception e) {
+                // sem sorte, ip continua null
+            }
+        }
+
+        JSObject result = new JSObject();
+        result.put("ip", ip);
+        call.resolve(result);
     }
 }
