@@ -21,12 +21,10 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "17"
 
       - name: Instalar dependências
-        run: |
-          npm install
-          npm install -g @capacitor/cli
+        run: npm install
 
       - name: Sincronizar Capacitor
         run: npx cap sync android

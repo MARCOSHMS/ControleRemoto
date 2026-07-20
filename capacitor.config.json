@@ -3,7 +3,7 @@
   "appName": "Controle Remoto PC",
   "webDir": "www",
   "server": {
-    "androidScheme": "https",
+    "androidScheme": "http",
     "cleartext": true
   }
 }

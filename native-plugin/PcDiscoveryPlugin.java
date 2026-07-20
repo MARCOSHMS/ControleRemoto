@@ -1,5 +1,8 @@
 package com.wonit.controleremotopc;
 
+import android.content.Context;
+import android.net.wifi.WifiManager;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -28,6 +31,9 @@ public class PcDiscoveryPlugin extends Plugin {
     private volatile boolean listening = false;
     private final Map<String, JSObject> found = new HashMap<>();
 
+    private WifiManager.MulticastLock multicastLock;
+    private WifiManager.WifiLock wifiLock;
+
     @PluginMethod
     public void startDiscovery(PluginCall call) {
         if (listening) {
@@ -36,6 +42,25 @@ public class PcDiscoveryPlugin extends Plugin {
         }
         listening = true;
         found.clear();
+
+        // Em muitos aparelhos, o rádio Wi-Fi filtra pacotes de
+        // broadcast/multicast pra economizar bateria enquanto a tela
+        // está ligada em modo de baixo consumo. Esses dois "locks"
+        // avisam o Android "estou de olho na rede, não filtra".
+        try {
+            WifiManager wifi = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifi != null) {
+                multicastLock = wifi.createMulticastLock("controleRemotoPcDiscovery");
+                multicastLock.setReferenceCounted(true);
+                multicastLock.acquire();
+
+                wifiLock = wifi.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "controleRemotoPcWifiLock");
+                wifiLock.setReferenceCounted(true);
+                wifiLock.acquire();
+            }
+        } catch (Exception e) {
+            // Se falhar, segue tentando escutar mesmo assim
+        }
 
         listenThread = new Thread(() -> {
             try {
@@ -90,6 +115,12 @@ public class PcDiscoveryPlugin extends Plugin {
         listening = false;
         if (socket != null && !socket.isClosed()) {
             socket.close();
+        }
+        try {
+            if (multicastLock != null && multicastLock.isHeld()) multicastLock.release();
+            if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
+        } catch (Exception e) {
+            // ignora
         }
         call.resolve();
     }

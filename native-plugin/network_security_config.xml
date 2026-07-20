@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Permite que o app faça requisições HTTP comuns (não-criptografadas)
+  para qualquer endereço — necessário porque o servidor no PC roda em
+  HTTP simples na rede local (sem certificado, o que seria complicado
+  de gerenciar numa rede doméstica com IP variável).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

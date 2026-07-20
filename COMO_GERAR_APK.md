@@ -39,6 +39,19 @@ android/app/src/main/java/com/wonit/controleremotopc/
 (Essa pasta de destino só existe depois do passo 1. O `MainActivity.java`
 que já existir lá deve ser **substituído** pelo novo.)
 
+## 2.1) Liberar o tráfego de rede (HTTP comum + broadcast)
+
+Sem esse passo, o app até abre mas **não consegue conectar no PC** — o
+Android bloqueia por padrão. Siga exatamente o arquivo
+`native-plugin/AndroidManifest-instrucoes.md`, que tem 3 partes:
+
+1. Adicionar 5 linhas de `<uses-permission>` no `AndroidManifest.xml`
+2. Adicionar 2 atributos na tag `<application>` do mesmo arquivo
+3. Copiar `native-plugin/network_security_config.xml` para
+   `android/app/src/main/res/xml/network_security_config.xml`
+
+Não pule esse passo — é o que mais causa "app abre mas não conecta".
+
 ## 3) Subir pro GitHub
 
 1. Crie um repositório novo no GitHub (pode ser privado)
