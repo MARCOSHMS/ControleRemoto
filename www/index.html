@@ -243,8 +243,15 @@ function addDeviceToList(device) {
 }
 
 function startAutoDiscovery() {
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
-    $("#status").textContent = "Digite o endereço do PC e o PIN";
+  const hasCapacitor = !!window.Capacitor;
+  const hasFn = hasCapacitor && typeof window.Capacitor.isNativePlatform === "function";
+  const isNative = hasFn && window.Capacitor.isNativePlatform();
+  const platform = hasCapacitor && window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : "?";
+
+  if (!isNative) {
+    $("#status").innerHTML =
+      "Digite o endereço do PC e o PIN" +
+      `<br><small style="color:#e5484d">[debug] Capacitor:${hasCapacitor} isNativeFn:${hasFn} isNative:${isNative} platform:${platform}</small>`;
     $("#manualBox").style.display = "block";
     return;
   }
